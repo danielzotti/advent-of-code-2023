@@ -14,18 +14,16 @@ interface RowMatch {
 
 const parseInput = (rawInput: string) => rawInput.split("\n");
 
-const hasAdjacentSymbolInOtherRow = (n: RowMatch, sList: RowMatch[]) =>
-  sList?.some((s) => s.startCol >= n.startCol - 1 && s.endCol <= n.endCol + 1);
-
-const hasAdjacentSymbolInCurrentRow = (n: RowMatch, sList: RowMatch[]) =>
-  sList?.some((s) => s.endCol === n.startCol || s.startCol === n.endCol);
-
-const part1 = (rawInput: string) => {
-  const input = parseInput(rawInput); //.slice(0, 3);
-  const numberRegex = /\d+/g;
-  const symbolRegex = /[^\d.\s]/g;
-
-  const rowMatches = input.reduce((arr, row, rowNumber) => {
+const mapRowMatches = ({
+  input,
+  numberRegex,
+  symbolRegex,
+}: {
+  input: string[];
+  numberRegex: RegExp;
+  symbolRegex: RegExp;
+}) => {
+  return input.reduce((arr: RowMatches[], row, rowNumber) => {
     const numberMatches = row.matchAll(numberRegex);
     const symbolMatches = row.matchAll(symbolRegex);
     const mapMatches = (match: RegExpMatchArray) => {
@@ -45,7 +43,52 @@ const part1 = (rawInput: string) => {
         symbols: [...symbolMatches].map(mapMatches),
       },
     ];
-  }, [] as RowMatches[]);
+  }, []);
+};
+
+const hasAdjacentTargetInOtherRow = (
+  current: RowMatch,
+  targetList: RowMatch[],
+) =>
+  !!targetList?.some(
+    // (t) => t.startCol >= current.startCol - 1 && t.endCol <= current.endCol + 1,
+    (t) => t.endCol >= current.startCol && t.startCol <= current.endCol,
+  );
+
+const hasAdjacentTargetInCurrentRow = (
+  current: RowMatch,
+  targetList: RowMatch[],
+) =>
+  !!targetList?.some(
+    (t) => t.endCol === current.startCol || t.startCol === current.endCol,
+  );
+
+const getAdjacentTargetValuesInOtherRow = (
+  current: RowMatch,
+  targetList: RowMatch[],
+) =>
+  targetList
+    ?.filter(
+      (t) => t.endCol >= current.startCol && t.startCol <= current.endCol,
+    )
+    .map((t) => parseInt(t.value, 10));
+
+const getAdjacentTargetValuesInCurrentRow = (
+  current: RowMatch,
+  targetList: RowMatch[],
+) =>
+  targetList
+    ?.filter(
+      (t) => t.endCol === current.startCol || t.startCol === current.endCol,
+    )
+    .map((t) => parseInt(t.value, 10));
+
+const part1 = (rawInput: string) => {
+  const input = parseInput(rawInput); //.slice(0, 3);
+  const numberRegex = /\d+/g;
+  const symbolRegex = /[^\d.\s]/g;
+
+  const rowMatches = mapRowMatches({ input, numberRegex, symbolRegex });
 
   return rowMatches.reduce(
     (total, values) =>
@@ -54,7 +97,7 @@ const part1 = (rawInput: string) => {
         // prev row
         if (
           !!rowMatches[values.row - 1] &&
-          hasAdjacentSymbolInOtherRow(
+          hasAdjacentTargetInOtherRow(
             number,
             rowMatches[values.row - 1]?.symbols,
           )
@@ -65,7 +108,7 @@ const part1 = (rawInput: string) => {
         // next row
         if (
           !!rowMatches[values.row + 1] &&
-          hasAdjacentSymbolInOtherRow(
+          hasAdjacentTargetInOtherRow(
             number,
             rowMatches[values.row + 1]?.symbols,
           )
@@ -74,7 +117,7 @@ const part1 = (rawInput: string) => {
         }
 
         // current row
-        if (hasAdjacentSymbolInCurrentRow(number, values.symbols)) {
+        if (hasAdjacentTargetInCurrentRow(number, values.symbols)) {
           rowTotal += parseInt(number.value, 10);
         }
         return rowTotal;
@@ -85,8 +128,38 @@ const part1 = (rawInput: string) => {
 
 const part2 = (rawInput: string) => {
   const input = parseInput(rawInput);
+  const numberRegex = /\d+/g;
+  const symbolRegex = /\*/g;
 
-  return;
+  const rowMatches = mapRowMatches({ input, numberRegex, symbolRegex });
+
+  return rowMatches.reduce(
+    (total, values) =>
+      total +
+      values.symbols.reduce((rowTotal, symbol) => {
+        const prevRowValues = getAdjacentTargetValuesInOtherRow(
+          symbol,
+          rowMatches[values.row - 1].numbers,
+        );
+
+        const currentRowValues = getAdjacentTargetValuesInCurrentRow(
+          symbol,
+          values.numbers,
+        );
+        const nextRowValues = getAdjacentTargetValuesInOtherRow(
+          symbol,
+          rowMatches[values.row + 1].numbers,
+        );
+
+        const numbers = [prevRowValues, currentRowValues, nextRowValues].flat();
+        const hasTwoAdjacentNumbers = numbers.filter((f) => !!f).length === 2;
+
+        return hasTwoAdjacentNumbers
+          ? rowTotal + numbers.reduce((mul, item) => mul * item)
+          : rowTotal;
+      }, 0),
+    0,
+  );
 };
 
 run({
@@ -110,10 +183,19 @@ run({
   },
   part2: {
     tests: [
-      // {
-      //   input: ``,
-      //   expected: "",
-      // },
+      {
+        input: `467..114..
+...*......
+..35..633.
+......#...
+617*......
+.....+.58.
+..592.....
+......755.
+...$.*....
+.664.598..`,
+        expected: 467835,
+      },
     ],
     solution: part2,
   },
